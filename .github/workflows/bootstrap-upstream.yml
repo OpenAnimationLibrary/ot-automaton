@@ -1,0 +1,41 @@
+name: Bootstrap OpenToonz baseline
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/bootstrap-upstream.yml
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out bootstrap commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Import verified OpenToonz master
+        shell: bash
+        env:
+          EXPECTED_UPSTREAM_SHA: 9001fd493e4ec27bf3efc368252eccb7da703928
+          BASELINE_TAG: ot-automaton-baseline-2026-09-12
+        run: |
+          set -euo pipefail
+          git remote add opentoonz-upstream https://github.com/opentoonz/opentoonz.git
+          git fetch --no-tags opentoonz-upstream master
+          actual_sha="$(git rev-parse refs/remotes/opentoonz-upstream/master)"
+          if [ "$actual_sha" != "$EXPECTED_UPSTREAM_SHA" ]; then
+            echo "Expected $EXPECTED_UPSTREAM_SHA but fetched $actual_sha"
+            exit 1
+          fi
+          git push origin "$GITHUB_SHA:refs/heads/repository-bootstrap"
+          git push origin "$EXPECTED_UPSTREAM_SHA:refs/heads/upstream-master"
+          git tag "$BASELINE_TAG" "$EXPECTED_UPSTREAM_SHA"
+          git push origin "refs/tags/$BASELINE_TAG"
+          git push origin "$EXPECTED_UPSTREAM_SHA:refs/heads/main" \
+            --force-with-lease="refs/heads/main:$GITHUB_SHA"
