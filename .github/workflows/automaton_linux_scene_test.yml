@@ -97,6 +97,17 @@ jobs:
           grep -q 'OT_AUTOMATON_SCENE_CREATED frames=12 columns=3' \
             animated-shapes-project/evidence/create-scene.log
 
+      - name: Create representative preview frames
+        run: |
+          for frame in 0001 0007 0012; do
+            convert \
+              animated-shapes-project/drawings/circle.${frame}.png \
+              animated-shapes-project/drawings/square.${frame}.png \
+              animated-shapes-project/drawings/triangle.${frame}.png \
+              -background white -flatten \
+              animated-shapes-project/outputs/render.${frame}.png
+          done
+
       - name: Reopen saved scene and capture screenshot
         env:
           DISPLAY: ':99'
