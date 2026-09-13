@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MIRROR_TOKEN: ${{ secrets.OT_AUTOMATON_MIRROR_TOKEN }}
+      GIT_LFS_SKIP_SMUDGE: '1'
     steps:
       - name: Verify mirror credential
         shell: bash
@@ -35,7 +36,7 @@ jobs:
         shell: bash
         env:
           EXPECTED_UPSTREAM_SHA: 9001fd493e4ec27bf3efc368252eccb7da703928
-          PREPARED_COMMIT: 023963681bbcefbc789076a4edd6773dffbd5f8e
+          PREPARED_COMMIT: ba7dcc23e4fa3c5155cd0da813469d6608b01b64
           BASELINE_TAG: ot-automaton-baseline-2026-09-13
         run: |
           set -euo pipefail
@@ -63,9 +64,10 @@ jobs:
           fi
 
           git switch --detach "$EXPECTED_UPSTREAM_SHA"
+          prepared_base="$(git merge-base "$PREPARED_COMMIT" "$GITHUB_SHA")"
           while IFS= read -r path; do
             git checkout "$PREPARED_COMMIT" -- "$path"
-          done < <(git diff-tree --no-commit-id --name-only -r "$PREPARED_COMMIT")
+          done < <(git diff --name-only "$prepared_base..$PREPARED_COMMIT")
 
           git config user.name "OT-Automaton"
           git config user.email "ot-automaton@users.noreply.github.com"
