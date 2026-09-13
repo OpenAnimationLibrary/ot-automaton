@@ -1,0 +1,167 @@
+name: OT-Automaton Linux Scene Acceptance
+run-name: Linux animated-shapes scene - ${{ github.sha }}
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'automaton/tools/create_shape_project.py'
+      - 'automaton/tools/validate_shape_project.py'
+      - 'automaton/tests/test_shape_project.py'
+      - '.github/workflows/automaton_linux_scene_test.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+env:
+  GIT_LFS_SKIP_SMUDGE: '1'
+  QT_XCB_GL_INTEGRATION: none
+  QT_OPENGL: software
+  LIBGL_ALWAYS_SOFTWARE: '1'
+
+jobs:
+  animated-shapes:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out automation harness
+        uses: actions/checkout@v6
+
+      - name: Install virtual-display runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            freeglut3-dev libboost-all-dev libfreetype6-dev libfuse2 \
+            libglew-dev libjson-c-dev liblz4-dev liblzo2-dev \
+            libmypaint-dev libomp-dev libopencv-dev libpng-dev \
+            libqt5multimedia5-plugins libqt5opengl5-dev \
+            libqt5serialport5-dev libqt5svg5-dev libsuperlu-dev \
+            libturbojpeg-dev libusb-1.0-0-dev qtbase5-dev \
+            qtmultimedia5-dev qtscript5-dev qttools5-dev \
+            qttools5-dev-tools qtwayland5 imagemagick unzip xdotool xvfb
+
+      - name: Download latest successful Linux baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          artifact_json=$(gh api \
+            "/repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100")
+          artifact_id=$(jq -r '[.artifacts[] | select(
+            (.expired == false) and
+            (.name | startswith("OT-Automaton-Phase1-Linux-"))
+          )] | sort_by(.created_at) | reverse | .[0].id // empty' \
+            <<<"$artifact_json")
+          if [ -z "$artifact_id" ]; then
+            echo "No non-expired Phase 1 Linux baseline artifact found" >&2
+            exit 1
+          fi
+          gh api \
+            "/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" \
+            > phase1-linux-artifact.zip
+          unzip -q phase1-linux-artifact.zip
+          tar -xzf ot-automaton-linux.tar.gz
+          echo "BASELINE_ARTIFACT_ID=$artifact_id" >> "$GITHUB_ENV"
+
+      - name: Generate complete animated-shapes project
+        run: |
+          mkdir -p animated-shapes-project/evidence
+          python automaton/tools/create_shape_project.py \
+            "$GITHUB_WORKSPACE/animated-shapes-project" \
+            > animated-shapes-project/evidence/generator-output.json
+          echo "$BASELINE_ARTIFACT_ID" \
+            > animated-shapes-project/evidence/baseline-artifact-id.txt
+          echo "$GITHUB_SHA" \
+            > animated-shapes-project/evidence/automation-commit.txt
+
+      - name: Run OpenToonz scene automation
+        env:
+          DISPLAY: ':99'
+          LD_LIBRARY_PATH: ${{ github.workspace }}/ot-automaton-linux/usr/lib/opentoonz
+        run: |
+          Xvfb :99 -screen 0 1280x720x24 \
+            > animated-shapes-project/evidence/xvfb.log 2>&1 &
+          echo "XVFB_PID=$!" >> "$GITHUB_ENV"
+          set +e
+          ot-automaton-linux/usr/bin/OpenToonz \
+            -TOONZROOT "$GITHUB_WORKSPACE/ot-automaton-linux/portablestuff" \
+            "$GITHUB_WORKSPACE/animated-shapes-project/scripts/create_scene.toonzscript" \
+            > animated-shapes-project/evidence/create-scene.log 2>&1
+          script_exit=$?
+          set -e
+          echo "OpenToonz script-mode exit code: $script_exit" \
+            >> animated-shapes-project/evidence/create-scene.log
+          test -s animated-shapes-project/scenes/animated-shapes.tnz
+          grep -q 'OT_AUTOMATON_SCENE_CREATED frames=12 columns=3' \
+            animated-shapes-project/evidence/create-scene.log
+
+      - name: Reopen saved scene and capture screenshot
+        env:
+          DISPLAY: ':99'
+          LD_LIBRARY_PATH: ${{ github.workspace }}/ot-automaton-linux/usr/lib/opentoonz
+        run: |
+          ot-automaton-linux/usr/bin/OpenToonz \
+            -TOONZROOT "$GITHUB_WORKSPACE/ot-automaton-linux/portablestuff" \
+            "$GITHUB_WORKSPACE/animated-shapes-project/scenes/animated-shapes.tnz" \
+            > animated-shapes-project/evidence/reopen.log 2>&1 &
+          app_pid=$!
+          echo "$app_pid" > animated-shapes-project/evidence/reopen.pid
+          window_id=''
+          for attempt in $(seq 1 60); do
+            window_id=$(xdotool search --onlyvisible --pid "$app_pid" 2>/dev/null | tail -1 || true)
+            if [ -n "$window_id" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ -z "$window_id" ]; then
+            echo "No visible OpenToonz window appeared" >&2
+            kill "$app_pid" 2>/dev/null || true
+            exit 1
+          fi
+          xdotool windowactivate --sync "$window_id" || true
+          xdotool key --window "$window_id" Escape || true
+          sleep 4
+          xdotool getwindowname "$window_id" \
+            > animated-shapes-project/evidence/window-title.txt
+          xdotool getwindowgeometry --shell "$window_id" \
+            > animated-shapes-project/evidence/window-geometry.txt
+          import -display :99 -window root \
+            animated-shapes-project/evidence/opentoonz-scene.png
+          kill "$app_pid" 2>/dev/null || true
+          wait "$app_pid" 2>/dev/null || true
+
+      - name: Create render contact sheet
+        run: |
+          montage animated-shapes-project/outputs/render.*.png \
+            -thumbnail 400x225 -tile 3x1 -geometry +4+4 \
+            animated-shapes-project/evidence/render-contact-sheet.png
+
+      - name: Validate and package all scene assets
+        run: |
+          find animated-shapes-project -type f -printf '%P\n' | sort \
+            > animated-shapes-project/evidence/project-files.txt
+          python automaton/tools/validate_shape_project.py \
+            animated-shapes-project \
+            --zip OT-Automaton-Linux-Animated-Shapes-${{ github.sha }}.zip
+          sha256sum OT-Automaton-Linux-Animated-Shapes-${{ github.sha }}.zip \
+            > OT-Automaton-Linux-Animated-Shapes-${{ github.sha }}.zip.sha256
+
+      - name: Stop virtual display
+        if: always()
+        run: kill "${XVFB_PID:-}" 2>/dev/null || true
+
+      - name: Upload complete project ZIP and screenshots
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: OT-Automaton-Linux-Animated-Shapes-${{ github.sha }}
+          path: |
+            OT-Automaton-Linux-Animated-Shapes-${{ github.sha }}.zip
+            OT-Automaton-Linux-Animated-Shapes-${{ github.sha }}.zip.sha256
+            animated-shapes-project/evidence/opentoonz-scene.png
+            animated-shapes-project/evidence/render-contact-sheet.png
+            animated-shapes-project/evidence/verification.json
+          if-no-files-found: warn
