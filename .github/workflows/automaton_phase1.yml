@@ -24,6 +24,9 @@ on:
 permissions:
   contents: read
 
+env:
+  GIT_LFS_SKIP_SMUDGE: '1'
+
 jobs:
   linux-baseline:
     runs-on: ubuntu-22.04
