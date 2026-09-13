@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  GIT_LFS_SKIP_SMUDGE: '1'
+
 jobs:
   verify-delta:
     runs-on: ubuntu-22.04
