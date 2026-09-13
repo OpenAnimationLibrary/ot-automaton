@@ -10,5 +10,10 @@
     "AUTOMATON_SCOPE.md",
     "automaton/"
   ],
-  "source_paths": []
+  "source_paths": [
+    "toonz/sources/toonz/main.cpp"
+  ],
+  "source_path_rationales": {
+    "toonz/sources/toonz/main.cpp": "Run the existing .toonzscript interface before optional plugin and interactive-window initialization in virtual automation mode."
+  }
 }

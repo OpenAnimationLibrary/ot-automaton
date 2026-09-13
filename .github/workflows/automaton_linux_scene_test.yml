@@ -1,15 +1,12 @@
 name: OT-Automaton Linux Scene Acceptance
-run-name: Linux animated-shapes scene - ${{ github.sha }}
+run-name: Linux animated-shapes scene - ${{ github.event.workflow_run.head_sha || github.sha }}
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'automaton/tools/create_shape_project.py'
-      - 'automaton/tools/validate_shape_project.py'
-      - 'automaton/tests/test_shape_project.py'
-      - '.github/workflows/automaton_linux_scene_test.yml'
+  workflow_run:
+    workflows:
+      - OT-Automaton Phase 1 Baseline
+    types:
+      - completed
   workflow_dispatch:
 
 permissions:
@@ -21,6 +18,7 @@ env:
   QT_OPENGL: software
   QT_XCB_FORCE_SOFTWARE_OPENGL: '1'
   LIBGL_ALWAYS_SOFTWARE: '1'
+  TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
   animated-shapes:
@@ -29,6 +27,8 @@ jobs:
     steps:
       - name: Check out automation harness
         uses: actions/checkout@v6
+        with:
+          ref: ${{ env.TARGET_SHA }}
 
       - name: Install virtual-display runtime dependencies
         run: |
@@ -49,9 +49,9 @@ jobs:
         run: |
           artifact_json=$(gh api \
             "/repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100")
-          artifact_id=$(jq -r '[.artifacts[] | select(
+          artifact_id=$(jq -r --arg target "$TARGET_SHA" '[.artifacts[] | select(
             (.expired == false) and
-            (.name | startswith("OT-Automaton-Phase1-Linux-"))
+            (.name == ("OT-Automaton-Phase1-Linux-" + $target))
           )] | sort_by(.created_at) | reverse | .[0].id // empty' \
             <<<"$artifact_json")
           if [ -z "$artifact_id" ]; then
@@ -73,7 +73,7 @@ jobs:
             > animated-shapes-project/evidence/generator-output.json
           echo "$BASELINE_ARTIFACT_ID" \
             > animated-shapes-project/evidence/baseline-artifact-id.txt
-          echo "$GITHUB_SHA" \
+          echo "$TARGET_SHA" \
             > animated-shapes-project/evidence/automation-commit.txt
 
       - name: Run OpenToonz scene automation
@@ -156,9 +156,9 @@ jobs:
             > animated-shapes-project/evidence/project-files.txt
           python automaton/tools/validate_shape_project.py \
             animated-shapes-project \
-            --zip OT-Automaton-Linux-Animated-Shapes-${{ github.sha }}.zip
-          sha256sum OT-Automaton-Linux-Animated-Shapes-${{ github.sha }}.zip \
-            > OT-Automaton-Linux-Animated-Shapes-${{ github.sha }}.zip.sha256
+            --zip OT-Automaton-Linux-Animated-Shapes-${TARGET_SHA}.zip
+          sha256sum OT-Automaton-Linux-Animated-Shapes-${TARGET_SHA}.zip \
+            > OT-Automaton-Linux-Animated-Shapes-${TARGET_SHA}.zip.sha256
 
       - name: Stop virtual display
         if: always()
@@ -168,9 +168,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: OT-Automaton-Linux-Animated-Shapes-${{ github.sha }}
+          name: OT-Automaton-Linux-Animated-Shapes-${{ env.TARGET_SHA }}
           path: |
-            OT-Automaton-Linux-Animated-Shapes-${{ github.sha }}.zip
-            OT-Automaton-Linux-Animated-Shapes-${{ github.sha }}.zip.sha256
+            OT-Automaton-Linux-Animated-Shapes-${{ env.TARGET_SHA }}.zip
+            OT-Automaton-Linux-Animated-Shapes-${{ env.TARGET_SHA }}.zip.sha256
             animated-shapes-project/evidence/
           if-no-files-found: warn

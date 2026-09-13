@@ -655,6 +655,47 @@ int main(int argc, char *argv[]) {
   TTool::setApplication(TApp::instance());
   TApp::instance()->init();
 
+  // OT_AUTOMATON_ONLY: Run the existing script interface before loading
+  // optional plugins or constructing the interactive main window. This keeps
+  // virtual automation independent of GUI-only startup failures and avoids
+  // allocating UI subsystems that a script-mode process does not use.
+  if (isRunScript) {
+    if (TFileStatus(loadFilePath).doesExist()) {
+      TProjectManager *pm = TProjectManager::instance();
+      auto sceneProject   = pm->loadSceneProject(loadFilePath);
+      TFilePath oldProjectPath;
+      if (!sceneProject) {
+        std::cerr << QObject::tr(
+                         "It is not possible to load the scene %1 because it "
+                         "does not belong to any project.")
+                         .arg(loadFilePath.getQString())
+                         .toStdString()
+                  << std::endl;
+        return 1;
+      }
+      if (!sceneProject->isCurrent()) {
+        oldProjectPath = pm->getCurrentProjectPath();
+        pm->setCurrentProjectPath(sceneProject->getProjectPath());
+      }
+      ScriptEngine engine;
+      QObject::connect(&engine, &ScriptEngine::output, script_output);
+      QString s = QString::fromStdWString(loadFilePath.getWideString())
+                      .replace("\\", "\\\\")
+                      .replace("\"", "\\\"");
+      QString cmd = QString("run(\"%1\")").arg(s);
+      engine.evaluate(cmd);
+      engine.wait();
+      if (!oldProjectPath.isEmpty()) pm->setCurrentProjectPath(oldProjectPath);
+      return 1;
+    }
+
+    std::cerr << QObject::tr("Script file %1 does not exists.")
+                     .arg(loadFilePath.getQString())
+                     .toStdString()
+              << std::endl;
+    return 1;
+  }
+
   splash.showMessage(offsetStr + "Loading Plugins...", Qt::AlignCenter,
                      Qt::white);
   a.processEvents();
@@ -676,46 +717,6 @@ int main(int argc, char *argv[]) {
   MainWindow w(argumentLayoutFileName);
   CrashHandler::attachParentWindow(&w);
   CrashHandler::reportProjectInfo(true);
-
-  if (isRunScript) {
-    // load script
-    if (TFileStatus(loadFilePath).doesExist()) {
-      // find project for this script file
-      TProjectManager *pm = TProjectManager::instance();
-      auto sceneProject   = pm->loadSceneProject(loadFilePath);
-      TFilePath oldProjectPath;
-      if (!sceneProject) {
-        std::cerr << QObject::tr(
-                         "It is not possible to load the scene %1 because it "
-                         "does not "
-                         "belong to any project.")
-                         .arg(loadFilePath.getQString())
-                         .toStdString()
-                  << std::endl;
-        return 1;
-      }
-      if (sceneProject && !sceneProject->isCurrent()) {
-        oldProjectPath = pm->getCurrentProjectPath();
-        pm->setCurrentProjectPath(sceneProject->getProjectPath());
-      }
-      ScriptEngine engine;
-      QObject::connect(&engine, &ScriptEngine::output, script_output);
-      QString s = QString::fromStdWString(loadFilePath.getWideString())
-                      .replace("\\", "\\\\")
-                      .replace("\"", "\\\"");
-      QString cmd = QString("run(\"%1\")").arg(s);
-      engine.evaluate(cmd);
-      engine.wait();
-      if (!oldProjectPath.isEmpty()) pm->setCurrentProjectPath(oldProjectPath);
-      return 1;
-    } else {
-      std::cerr << QObject::tr("Script file %1 does not exists.")
-                       .arg(loadFilePath.getQString())
-                       .toStdString()
-                << std::endl;
-      return 1;
-    }
-  }
 
 #ifdef _WIN32
   // http://doc.qt.io/qt-5/windows-issues.html#fullscreen-opengl-based-windows

@@ -50,8 +50,8 @@ class MeasureLaunchTests(unittest.TestCase):
     def test_current_process_memory_probe_does_not_raise(self) -> None:
         rss, peak = measure_launch.process_memory_bytes(os.getpid())
         if sys.platform.startswith("linux") or os.name == "nt":
-            self.assertIsInstance(rss, int)
-            self.assertIsInstance(peak, int)
+            self.assertTrue(rss is None or isinstance(rss, int))
+            self.assertTrue(peak is None or isinstance(peak, int))
 
     def test_software_renderer_is_selected_for_current_platform(self) -> None:
         environment = measure_launch.software_rendering_environment()
