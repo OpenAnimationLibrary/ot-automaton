@@ -34,7 +34,7 @@ jobs:
         shell: bash
         env:
           EXPECTED_UPSTREAM_SHA: 9001fd493e4ec27bf3efc368252eccb7da703928
-          PREPARED_COMMIT: 9a85bb2e0d0db915d7432172fcd3bd2e4b497a22
+          PREPARED_COMMIT: 023963681bbcefbc789076a4edd6773dffbd5f8e
           BASELINE_TAG: ot-automaton-baseline-2026-09-13
         run: |
           set -euo pipefail
