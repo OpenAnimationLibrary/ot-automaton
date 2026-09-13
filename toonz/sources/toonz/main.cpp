@@ -644,21 +644,10 @@ int main(int argc, char *argv[]) {
 
   loadShaderInterfaces(ToonzFolder::getLibraryFolder() + TFilePath("shaders"));
 
-  splash.showMessage(offsetStr + "Initializing OpenToonz ...", Qt::AlignCenter,
-                     Qt::white);
-  a.processEvents();
-
-  // Initialize ThemeManager before TApp
-  auto &themeManager = ThemeManager::getInstance();
-  themeManager.initialize();
-
-  TTool::setApplication(TApp::instance());
-  TApp::instance()->init();
-
-  // OT_AUTOMATON_ONLY: Run the existing script interface before loading
-  // optional plugins or constructing the interactive main window. This keeps
-  // virtual automation independent of GUI-only startup failures and avoids
-  // allocating UI subsystems that a script-mode process does not use.
+  // OT_AUTOMATON_ONLY: Run the existing script interface before initializing
+  // theme, application, plugin, or interactive-window state. Script bindings
+  // own their scene objects and only require the core environment initialized
+  // above, keeping virtual automation independent of GUI-only startup faults.
   if (isRunScript) {
     if (TFileStatus(loadFilePath).doesExist()) {
       TProjectManager *pm = TProjectManager::instance();
@@ -695,6 +684,17 @@ int main(int argc, char *argv[]) {
               << std::endl;
     return 1;
   }
+
+  splash.showMessage(offsetStr + "Initializing OpenToonz ...", Qt::AlignCenter,
+                     Qt::white);
+  a.processEvents();
+
+  // Initialize ThemeManager before TApp
+  auto &themeManager = ThemeManager::getInstance();
+  themeManager.initialize();
+
+  TTool::setApplication(TApp::instance());
+  TApp::instance()->init();
 
   splash.showMessage(offsetStr + "Loading Plugins...", Qt::AlignCenter,
                      Qt::white);
