@@ -85,7 +85,7 @@ jobs:
             > animated-shapes-project/evidence/xvfb.log 2>&1 &
           echo "XVFB_PID=$!" >> "$GITHUB_ENV"
           set +e
-          ot-automaton-linux/usr/bin/OpenToonz \
+          timeout --signal=KILL 180s ot-automaton-linux/usr/bin/OpenToonz \
             -TOONZROOT "$GITHUB_WORKSPACE/ot-automaton-linux/portablestuff" \
             "$GITHUB_WORKSPACE/animated-shapes-project/scripts/create_scene.toonzscript" \
             > animated-shapes-project/evidence/create-scene.log 2>&1
@@ -172,7 +172,5 @@ jobs:
           path: |
             OT-Automaton-Linux-Animated-Shapes-${{ github.sha }}.zip
             OT-Automaton-Linux-Animated-Shapes-${{ github.sha }}.zip.sha256
-            animated-shapes-project/evidence/opentoonz-scene.png
-            animated-shapes-project/evidence/render-contact-sheet.png
-            animated-shapes-project/evidence/verification.json
+            animated-shapes-project/evidence/
           if-no-files-found: warn
