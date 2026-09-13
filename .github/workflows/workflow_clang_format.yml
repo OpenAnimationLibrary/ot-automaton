@@ -2,6 +2,8 @@ name: clang-format Check
 
 on:
   pull_request:
+    branches:
+      - master  # Inert in the standalone OT-Automaton main branch
     paths:
       - "toonz/sources/**/*.c"
       - "toonz/sources/**/*.cc"

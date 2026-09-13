@@ -16,6 +16,8 @@ on:
       - '!**/.github/**'                          # Exclude everything in .github folder
       - '.github/workflows/workflow_windows.yml'  # Include Windows workflow file
   pull_request:
+    branches:
+      - master  # Inert in the standalone OT-Automaton main branch
     paths:
       - '**/*'
       - '!appveyor.yml'

@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "id": "full",
+  "phase": 1,
+  "status": "baseline-only",
+  "description": "Unrestricted upstream OpenToonz used for baseline comparison.",
+  "initialization_policy": "upstream-default",
+  "declared_capabilities": ["all"]
+}
