@@ -1,4 +1,5 @@
 name: OT-Automaton Phase 1 Baseline
+run-name: Phase 1 baseline - ${{ github.sha }}
 
 on:
   push:
