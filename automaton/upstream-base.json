@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "upstream_repository": "https://github.com/opentoonz/opentoonz.git",
+  "upstream_branch": "master",
+  "upstream_commit": "9001fd493e4ec27bf3efc368252eccb7da703928",
+  "upstream_tree": "f92792d1714b452524f498accaf9e6fba0847530",
+  "baseline_tag": "ot-automaton-baseline-2026-09-13",
+  "recorded_utc": "2026-09-13T00:00:00Z"
+}

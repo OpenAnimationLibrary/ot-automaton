@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "purpose": "Declare every OT-Automaton-only difference from upstream.",
+  "infrastructure_prefixes": [
+    ".github/workflows/automaton_",
+    ".github/workflows/workflow_clang_format.yml",
+    ".github/workflows/workflow_linux.yml",
+    ".github/workflows/workflow_macos.yml",
+    ".github/workflows/workflow_windows.yml",
+    "AUTOMATON_SCOPE.md",
+    "automaton/"
+  ],
+  "source_paths": []
+}

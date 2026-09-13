@@ -1,0 +1,40 @@
+name: OT-Automaton Scope Guard
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-delta:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out OT-Automaton
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch the exact upstream mirror ref
+        run: git fetch origin upstream-master:refs/remotes/origin/upstream-master
+
+      - name: Verify provenance and declared delta
+        run: |
+          python automaton/tools/verify_repository.py \
+            --base-ref origin/upstream-master \
+            --write-report automaton-delta-report.json
+
+      - name: Run infrastructure tests
+        run: python -m unittest discover -s automaton/tests -v
+
+      - name: Upload delta report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: automaton-delta-report-${{ github.sha }}
+          path: automaton-delta-report.json
+          if-no-files-found: ignore

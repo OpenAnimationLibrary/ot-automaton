@@ -1,0 +1,231 @@
+name: OT-Automaton Phase 1 Baseline
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'automaton/**'
+      - 'AUTOMATON_SCOPE.md'
+      - 'toonz/**'
+      - 'thirdparty/**'
+      - 'stuff/**'
+      - '.github/workflows/automaton_phase1.yml'
+  pull_request:
+    paths:
+      - 'automaton/**'
+      - 'AUTOMATON_SCOPE.md'
+      - 'toonz/**'
+      - 'thirdparty/**'
+      - 'stuff/**'
+      - '.github/workflows/automaton_phase1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-baseline:
+    runs-on: ubuntu-22.04
+    env:
+      ARTIFACT_ROOT: ${{ github.workspace }}/ot-automaton-linux
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install build and virtual-display dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential ccache cmake freeglut3-dev libboost-all-dev \
+            libfreetype6-dev libfuse2 libglew-dev libjson-c-dev liblz4-dev \
+            liblzo2-dev libmypaint-dev libomp-dev libopencv-dev libpng-dev \
+            libqt5multimedia5-plugins libqt5opengl5-dev libqt5serialport5-dev \
+            libqt5svg5-dev libsuperlu-dev libturbojpeg-dev libusb-1.0-0-dev \
+            ninja-build pkg-config qt5-qmake qtbase5-dev qtmultimedia5-dev \
+            qtscript5-dev qttools5-dev qttools5-dev-tools qtwayland5 xvfb
+
+      - name: Restore compiler cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: automaton-linux-gcc-${{ github.sha }}
+          restore-keys: |
+            automaton-linux-gcc-
+
+      - name: Build bundled libtiff
+        run: |
+          cd thirdparty/tiff-4.0.3
+          CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
+          make -j "$(nproc)"
+
+      - name: Configure and build OpenToonz
+        run: |
+          cmake -S toonz/sources -B toonz/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_COMPILER=gcc \
+            -DCMAKE_CXX_COMPILER=g++ \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DWITH_TRANSLATION=OFF
+          cmake --build toonz/build --parallel
+
+      - name: Stage portable baseline
+        run: |
+          DESTDIR="$ARTIFACT_ROOT" cmake --install toonz/build
+          mkdir -p "$ARTIFACT_ROOT/evidence"
+          if [ -d "$ARTIFACT_ROOT/usr/share/opentoonz/stuff" ]; then
+            mv "$ARTIFACT_ROOT/usr/share/opentoonz/stuff" \
+              "$ARTIFACT_ROOT/portablestuff"
+          else
+            cp -a stuff "$ARTIFACT_ROOT/portablestuff"
+          fi
+
+      - name: Measure virtual launch
+        env:
+          DISPLAY: ':99'
+        run: |
+          Xvfb :99 -screen 0 1280x720x24 \
+            >"$ARTIFACT_ROOT/evidence/xvfb.log" 2>&1 &
+          xvfb_pid=$!
+          trap 'kill "$xvfb_pid" 2>/dev/null || true' EXIT
+          python automaton/tools/measure_launch.py \
+            --executable "$ARTIFACT_ROOT/usr/bin/OpenToonz" \
+            --working-directory "$ARTIFACT_ROOT" \
+            --software-rendering \
+            --duration-seconds 15 \
+            --env "LD_LIBRARY_PATH=$ARTIFACT_ROOT/usr/lib/opentoonz" \
+            --output "$ARTIFACT_ROOT/evidence/baseline.json"
+
+      - name: Record build environment
+        if: always()
+        run: |
+          mkdir -p "$ARTIFACT_ROOT/evidence"
+          dpkg-query -W >"$ARTIFACT_ROOT/evidence/packages.txt"
+          cmake --version >"$ARTIFACT_ROOT/evidence/cmake-version.txt"
+          c++ --version >"$ARTIFACT_ROOT/evidence/compiler-version.txt"
+          git rev-parse HEAD >"$ARTIFACT_ROOT/evidence/source-commit.txt"
+
+      - name: Create Linux package
+        if: always()
+        run: tar -C "${{ github.workspace }}" -czf ot-automaton-linux.tar.gz ot-automaton-linux
+
+      - name: Upload Linux baseline
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: OT-Automaton-Phase1-Linux-${{ github.sha }}
+          path: ot-automaton-linux.tar.gz
+          if-no-files-found: error
+
+  windows-baseline:
+    runs-on: windows-2025
+    env:
+      QT_PATH: ${{ github.workspace }}\thirdparty\qt\5.15.2_wintab\msvc2019_64
+      MSVCVERSION: Visual Studio 18 2026
+      BOOST_TOOLSET: '14.3'
+      BOOST_VERSION: 1.87.0
+      BOOST_ROOT: C:\local\boost_1_87_0
+      OPENCV_VERSION: 4.13.0
+      OpenCV_DIR: C:\tools\opencv\build
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+        with:
+          lfs: false
+
+      - name: Restore OpenCV and Boost cache
+        id: cache-dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            C:\tools\opencv
+            ${{ env.BOOST_ROOT }}
+          key: automaton-windows-opencv-${{ env.OPENCV_VERSION }}-boost-${{ env.BOOST_VERSION }}
+
+      - name: Install OpenCV and Boost
+        if: steps.cache-dependencies.outputs.cache-hit != 'true'
+        shell: cmd
+        run: |
+          choco install opencv --version=${{ env.OPENCV_VERSION }} -y
+          choco install boost-msvc-${{ env.BOOST_TOOLSET }} --version=${{ env.BOOST_VERSION }} -y
+
+      - name: Install custom Qt 5.15.2 with WinTab
+        shell: cmd
+        run: |
+          mkdir thirdparty\qt
+          curl -fsSL -o Qt5.15.2_wintab.zip https://github.com/shun-iwasawa/qt5/releases/download/v5.15.2_wintab/Qt5.15.2_wintab.zip
+          7z x Qt5.15.2_wintab.zip
+          move Qt5.15.2_wintab\5.15.2_wintab thirdparty\qt
+
+      - name: Install third-party prebuilt libraries
+        shell: cmd
+        run: |
+          curl -fsSL -o thirdparty-libs.zip https://github.com/andeon/opentoonz-thirdparty-libs/releases/download/prebuilt-libs-v1/thirdparty-libs.zip
+          7z x -y thirdparty-libs.zip
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Configure OpenToonz
+        shell: cmd
+        run: |
+          copy /Y thirdparty\tiff-4.0.3\libtiff\tif_config.vc.h thirdparty\tiff-4.0.3\libtiff\tif_config.h
+          copy /Y thirdparty\tiff-4.0.3\libtiff\tiffconf.vc.h thirdparty\tiff-4.0.3\libtiff\tiffconf.h
+          copy /Y thirdparty\libpng-1.6.21\scripts\pnglibconf.h.prebuilt thirdparty\libpng-1.6.21\pnglibconf.h
+          cmake -S toonz\sources -B toonz\build -G "%MSVCVERSION%" -Ax64 ^
+            -DQT_PATH="%QT_PATH%" ^
+            -DBOOST_ROOT="%BOOST_ROOT%" ^
+            -DOpenCV_DIR="%OpenCV_DIR%" ^
+            -DWITH_WINTAB=Y
+
+      - name: Build OpenToonz
+        shell: cmd
+        run: msbuild /p:Configuration=RelWithDebInfo /m /verbosity:minimal toonz\build\ALL_BUILD.vcxproj
+
+      - name: Stage portable baseline
+        shell: cmd
+        run: |
+          mkdir ot-automaton-windows
+          copy /Y toonz\build\RelWithDebInfo\*.* ot-automaton-windows\
+          copy /Y thirdparty\glut\3.7.6\lib\glut64.dll ot-automaton-windows\
+          copy /Y thirdparty\glew\glew-1.9.0\bin\64bit\glew32.dll ot-automaton-windows\
+          copy /Y thirdparty\libmypaint\dist\64\libiconv-2.dll ot-automaton-windows\
+          copy /Y thirdparty\libmypaint\dist\64\libintl-8.dll ot-automaton-windows\
+          copy /Y thirdparty\libmypaint\dist\64\libjson-c-2.dll ot-automaton-windows\
+          copy /Y thirdparty\libmypaint\dist\64\libmypaint-1-4-0.dll ot-automaton-windows\
+          copy /Y C:\tools\opencv\build\x64\vc16\bin\opencv_world4130.dll ot-automaton-windows\
+          "%QT_PATH%\bin\windeployqt.exe" ot-automaton-windows\OpenToonz.exe --opengl
+          del /Q ot-automaton-windows\*.pdb
+          del /Q ot-automaton-windows\vc_redist.x64.exe
+          xcopy /Y /E /I stuff ot-automaton-windows\portablestuff
+          mkdir ot-automaton-windows\evidence
+
+      - name: Measure virtual launch
+        shell: cmd
+        run: |
+          python automaton\tools\measure_launch.py ^
+            --executable ot-automaton-windows\OpenToonz.exe ^
+            --working-directory ot-automaton-windows ^
+            --software-rendering ^
+            --duration-seconds 15 ^
+            --output ot-automaton-windows\evidence\baseline.json
+
+      - name: Record build environment
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force ot-automaton-windows/evidence | Out-Null
+          cmake --version | Out-File ot-automaton-windows/evidence/cmake-version.txt
+          cl 2>&1 | Out-File ot-automaton-windows/evidence/compiler-version.txt
+          git rev-parse HEAD | Out-File ot-automaton-windows/evidence/source-commit.txt
+
+      - name: Upload Windows baseline
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: OT-Automaton-Phase1-Windows-${{ github.sha }}
+          path: ot-automaton-windows
+          if-no-files-found: error
