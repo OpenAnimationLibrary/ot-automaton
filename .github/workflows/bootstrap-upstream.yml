@@ -8,22 +8,33 @@ on:
       - .github/workflows/bootstrap-upstream.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   bootstrap:
     runs-on: ubuntu-latest
+    env:
+      MIRROR_TOKEN: ${{ secrets.OT_AUTOMATON_MIRROR_TOKEN }}
     steps:
+      - name: Verify mirror credential
+        shell: bash
+        run: |
+          if [ -z "${MIRROR_TOKEN:-}" ]; then
+            echo "OT_AUTOMATON_MIRROR_TOKEN is not configured."
+            exit 1
+          fi
+
       - name: Check out bootstrap commit
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.OT_AUTOMATON_MIRROR_TOKEN }}
 
       - name: Import verified OpenToonz master
         shell: bash
         env:
           EXPECTED_UPSTREAM_SHA: 9001fd493e4ec27bf3efc368252eccb7da703928
-          BASELINE_TAG: ot-automaton-baseline-2026-09-12
+          BASELINE_TAG: ot-automaton-baseline-2026-09-13
         run: |
           set -euo pipefail
           git remote add opentoonz-upstream https://github.com/opentoonz/opentoonz.git
