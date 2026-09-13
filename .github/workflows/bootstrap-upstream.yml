@@ -25,28 +25,55 @@ jobs:
           fi
 
       - name: Check out bootstrap commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.OT_AUTOMATON_MIRROR_TOKEN }}
 
-      - name: Import verified OpenToonz master
+      - name: Import and prepare verified baseline
         shell: bash
         env:
           EXPECTED_UPSTREAM_SHA: 9001fd493e4ec27bf3efc368252eccb7da703928
+          PREPARED_COMMIT: 9a85bb2e0d0db915d7432172fcd3bd2e4b497a22
           BASELINE_TAG: ot-automaton-baseline-2026-09-13
         run: |
           set -euo pipefail
           git remote add opentoonz-upstream https://github.com/opentoonz/opentoonz.git
           git fetch --no-tags opentoonz-upstream master
+          git fetch origin prepared/phase-0-1
           actual_sha="$(git rev-parse refs/remotes/opentoonz-upstream/master)"
           if [ "$actual_sha" != "$EXPECTED_UPSTREAM_SHA" ]; then
             echo "Expected $EXPECTED_UPSTREAM_SHA but fetched $actual_sha"
             exit 1
           fi
+
           git push origin "$GITHUB_SHA:refs/heads/repository-bootstrap"
           git push origin "$EXPECTED_UPSTREAM_SHA:refs/heads/upstream-master"
-          git tag "$BASELINE_TAG" "$EXPECTED_UPSTREAM_SHA"
-          git push origin "refs/tags/$BASELINE_TAG"
-          git push origin "$EXPECTED_UPSTREAM_SHA:refs/heads/main" \
+
+          if git show-ref --verify --quiet "refs/tags/$BASELINE_TAG"; then
+            tagged_sha="$(git rev-list -n 1 "$BASELINE_TAG")"
+            if [ "$tagged_sha" != "$EXPECTED_UPSTREAM_SHA" ]; then
+              echo "$BASELINE_TAG points to unexpected commit $tagged_sha"
+              exit 1
+            fi
+          else
+            git tag "$BASELINE_TAG" "$EXPECTED_UPSTREAM_SHA"
+            git push origin "refs/tags/$BASELINE_TAG"
+          fi
+
+          git switch --detach "$EXPECTED_UPSTREAM_SHA"
+          while IFS= read -r path; do
+            git checkout "$PREPARED_COMMIT" -- "$path"
+          done < <(git diff-tree --no-commit-id --name-only -r "$PREPARED_COMMIT")
+
+          git config user.name "OT-Automaton"
+          git config user.email "ot-automaton@users.noreply.github.com"
+          git commit -m "Establish OT-Automaton Phase 0 and Phase 1 infrastructure"
+          phase_head="$(git rev-parse HEAD)"
+
+          python automaton/tools/verify_repository.py \
+            --base-ref "$EXPECTED_UPSTREAM_SHA"
+          python -m unittest discover -s automaton/tests -v
+
+          git push origin "$phase_head:refs/heads/main" \
             --force-with-lease="refs/heads/main:$GITHUB_SHA"
