@@ -1,7 +1,15 @@
 name: OT-Automaton Linux Scene Acceptance
-run-name: Linux animated-shapes scene - ${{ github.event.workflow_run.head_sha || github.sha }}
+run-name: Linux animated-shapes scene - ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event_name == 'push' && github.event.before || github.sha }}
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'automaton/tools/create_shape_project.py'
+      - 'automaton/tools/validate_shape_project.py'
+      - 'automaton/tests/test_shape_project.py'
+      - '.github/workflows/automaton_linux_scene_test.yml'
   workflow_run:
     workflows:
       - OT-Automaton Phase 1 Baseline
@@ -18,7 +26,7 @@ env:
   QT_OPENGL: software
   QT_XCB_FORCE_SOFTWARE_OPENGL: '1'
   LIBGL_ALWAYS_SOFTWARE: '1'
-  TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+  TARGET_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event_name == 'push' && github.event.before || github.sha }}
 
 jobs:
   animated-shapes:
