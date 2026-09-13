@@ -39,7 +39,15 @@ def linux_memory_bytes(pid: int) -> tuple[int | None, int | None]:
                 return None
             return int(value.split()[0]) * 1024
 
-        return kibibytes("VmRSS"), kibibytes("VmHWM")
+        rss = kibibytes("VmRSS")
+        peak = kibibytes("VmHWM")
+        if rss is None:
+            statm_path = status_path.with_name("statm")
+            resident_pages = int(
+                statm_path.read_text(encoding="utf-8").split()[1]
+            )
+            rss = resident_pages * os.sysconf("SC_PAGE_SIZE")
+        return rss, peak if peak is not None else rss
     except (FileNotFoundError, PermissionError, ValueError):
         return None, None
 
