@@ -1,12 +1,12 @@
 name: OT-Automaton Phase 1 Baseline
-run-name: Phase 1 baseline - ${{ github.sha }}
 
 on:
   push:
     branches:
       - main
     paths:
-      - 'automaton/**'
+      - 'automaton/profiles/**'
+      - 'automaton/tools/measure_launch.py'
       - 'AUTOMATON_SCOPE.md'
       - 'toonz/**'
       - 'thirdparty/**'
@@ -14,7 +14,8 @@ on:
       - '.github/workflows/automaton_phase1.yml'
   pull_request:
     paths:
-      - 'automaton/**'
+      - 'automaton/profiles/**'
+      - 'automaton/tools/measure_launch.py'
       - 'AUTOMATON_SCOPE.md'
       - 'toonz/**'
       - 'thirdparty/**'
@@ -98,6 +99,7 @@ jobs:
           python automaton/tools/measure_launch.py \
             --executable "$ARTIFACT_ROOT/usr/bin/OpenToonz" \
             --working-directory "$ARTIFACT_ROOT" \
+            --stuff "$ARTIFACT_ROOT/portablestuff" \
             --software-rendering \
             --duration-seconds 15 \
             --env "LD_LIBRARY_PATH=$ARTIFACT_ROOT/usr/lib/opentoonz" \
@@ -213,6 +215,7 @@ jobs:
           python automaton\tools\measure_launch.py ^
             --executable ot-automaton-windows\OpenToonz.exe ^
             --working-directory ot-automaton-windows ^
+            --stuff ot-automaton-windows\portablestuff ^
             --software-rendering ^
             --duration-seconds 15 ^
             --output ot-automaton-windows\evidence\baseline.json
@@ -223,7 +226,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force ot-automaton-windows/evidence | Out-Null
           cmake --version | Out-File ot-automaton-windows/evidence/cmake-version.txt
-          cl 2>&1 | Out-File ot-automaton-windows/evidence/compiler-version.txt
+          msbuild -version | Out-File ot-automaton-windows/evidence/compiler-version.txt
           git rev-parse HEAD | Out-File ot-automaton-windows/evidence/source-commit.txt
 
       - name: Upload Windows baseline

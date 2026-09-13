@@ -120,6 +120,22 @@ def parse_environment(values: list[str]) -> dict[str, str]:
     return parsed
 
 
+def software_rendering_environment() -> dict[str, str]:
+    """Select a software renderer compatible with the runner platform."""
+    if os.name == "nt":
+        # The portable Windows package ships Qt's ANGLE libraries. WARP keeps
+        # rendering independent of physical GPU access in hosted/virtual VMs.
+        return {
+            "QT_OPENGL": "angle",
+            "QT_ANGLE_PLATFORM": "warp",
+        }
+    return {
+        "LIBGL_ALWAYS_SOFTWARE": "1",
+        "QT_OPENGL": "software",
+        "QT_XCB_FORCE_SOFTWARE_OPENGL": "1",
+    }
+
+
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--executable", required=True, type=Path)
@@ -174,13 +190,7 @@ def main() -> int:
         }
     )
     if arguments.software_rendering:
-        environment.update(
-            {
-                "LIBGL_ALWAYS_SOFTWARE": "1",
-                "QT_OPENGL": "software",
-                "QT_XCB_FORCE_SOFTWARE_OPENGL": "1",
-            }
-        )
+        environment.update(software_rendering_environment())
     try:
         environment.update(parse_environment(arguments.env))
     except ValueError as exc:

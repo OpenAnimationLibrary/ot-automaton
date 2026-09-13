@@ -53,6 +53,15 @@ class MeasureLaunchTests(unittest.TestCase):
             self.assertIsInstance(rss, int)
             self.assertIsInstance(peak, int)
 
+    def test_software_renderer_is_selected_for_current_platform(self) -> None:
+        environment = measure_launch.software_rendering_environment()
+        if os.name == "nt":
+            self.assertEqual(environment["QT_OPENGL"], "angle")
+            self.assertEqual(environment["QT_ANGLE_PLATFORM"], "warp")
+        else:
+            self.assertEqual(environment["QT_OPENGL"], "software")
+            self.assertEqual(environment["LIBGL_ALWAYS_SOFTWARE"], "1")
+
 
 if __name__ == "__main__":
     unittest.main()
