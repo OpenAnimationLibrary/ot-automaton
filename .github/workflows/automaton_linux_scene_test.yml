@@ -18,8 +18,8 @@ permissions:
 
 env:
   GIT_LFS_SKIP_SMUDGE: '1'
-  QT_XCB_GL_INTEGRATION: none
   QT_OPENGL: software
+  QT_XCB_FORCE_SOFTWARE_OPENGL: '1'
   LIBGL_ALWAYS_SOFTWARE: '1'
 
 jobs:
